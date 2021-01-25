@@ -1,0 +1,15 @@
+{
+  "BOT_TOKEN": "Bot token goes here",
+  "SERVER_ID": "Server ID Goes here",
+  "botPermissionsRoleList": [
+    "Valid", 
+    "Bot", 
+    "Users",
+    "Go",
+    "Here"],
+  "VIPRoleList": [
+    "VIP", 
+    "Roles", 
+    "Go",
+    "Here"]
+}
