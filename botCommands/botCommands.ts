@@ -1,242 +1,141 @@
-import * as Discord from 'discord.js';
+import * as Discord from "discord.js";
 import { 
-  getRoleByName, 
-  updateUserRole, 
-  memberHasAllRolesById,
-  hasDefaultPFP,
-  returnRoleIdNameArrayToPost,
-} from './Utilities/roleUtils'
-import { returnJoinDates, 
-appendTxtFileIfPostTooBig,
-postInWarned,
-postInNamedChannel 
-} from './Utilities/chanUtils'
-import { isMemberVIP 
-} from '../index'
+  extractTokens,
+  extractNumbersForId,
+  returnIdArrayFromArgs
+} from "./Utilities/argUtils";
+import {
+  postBoostInfoCommand,
+  joinCommand,
+  checkPFPCommand,
+  kickUserCommand,
+  banUserCommand,
+  replaceAllRolesCommand,
+  howManyAreCommand,
+  whoIsCommand,
+  quarantineCommand,
+  unQuarantineCommand,
+  warnCommand,
+  msgCommand,
+  dmsgCommand
+} from "./rawBotCommands/rawBotCommands";
 
-export let postBoostInfoCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputMessage:Discord.Message) => {
-  let boosterRole:Discord.Role = await getRoleByName(inputGuildObject, "Nitro Booster");
-  let boosterRoleMembers = (await boosterRole).members;
+export let zeroArgCommandArray:string[] = ["help","boostinfo","checkpfp"];
+
+export async function zeroArgumentBotCommands(inputGuildObject:Discord.Guild, commandInput:string, inputMessage:Discord.Message) {
+
+  switch(commandInput){
+      case "help":
+        inputMessage.channel.send(`=help | Show list of commands
+        =boostinfo | Show server's boost info
+        =checkpfp | Applies 'Default PFP' role to users with default PFP
+        =join @user | Show when user joined Discord, and this Server
+        =kick @user | Kick a user
+        =ban @user | Ban a user
+        =quarantine @user | Applies quarantine role
+        =unquarantine @user | Removes quarantine role
+        =warn @user | Warn a user. If warned twice, user is banned.
+        =msg #channel message | Sends message to channel
+        =dmsg @user message | DM message to user
+        =replaceall @roleA @roleB | Replaces all roleA with roleB
+        =howmanyare @role @role .. | Show number of users with listed roles
+        =whois @role @role .. | Lists users by name with listed roles`)
+        break;
+
+      case "boostinfo": // =boostinfo
+        postBoostInfoCommand(inputGuildObject,inputMessage);
+        break;
+        
+      case "checkpfp": // =checkpfp
+        checkPFPCommand(inputGuildObject);
+        break;
+    }
+}
+
+export let oneArgCommandArray:string[] = ["join","kick","ban","quarantine","unquarantine","warn", "msg","dmsg"];
+
+export async function oneArgumentBotCommands(inputGuildObject:Discord.Guild, commandInput:string, arg1:string, 
+  messageToPost:string, inputMessage:Discord.Message) {
   
-  inputMessage.channel.send(
-  `Server is currently at tier: ${inputGuildObject.premiumTier}
-  Total number of Nitro Boosts: ${inputGuildObject.premiumSubscriptionCount}
-  Total number of boosters: ${boosterRoleMembers.size}`
-  );
-}
+  switch (commandInput) {
+  case "join": // =join @user
+    let joinTestUser:string = extractNumbersForId(arg1);
+    joinCommand(inputGuildObject,joinTestUser,inputMessage)
+    break;
 
-export let joinCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputUserId:string, 
-  inputMessage:Discord.Message) =>
-{
-  await returnJoinDates(inputGuildObject,inputUserId).then(async (joinDateObject) => {
-  inputMessage.channel.send(
-    `${joinDateObject.memberName} joined:
-   - Discord on ${joinDateObject.discordJoinDate}
-   - ${inputGuildObject.name} on ${joinDateObject.serverJoinDate}`)}
-   ).catch(() => {
-    inputMessage.channel.send('No such user found.')
-   }
-  )
-}
+  case "kick": // =kick @user
+    let kickedUserId:string = extractNumbersForId(arg1);
+    kickUserCommand(inputGuildObject, kickedUserId, inputMessage, messageToPost)
+    break;
 
-export let kickUserCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputUserId:string, 
-  inputMessage:Discord.Message, 
-  inputReasonMessage?:string):Promise<void> => {
+  case "ban": // =ban @user
+    let bannedUserId:string = extractNumbersForId(arg1);
+    banUserCommand(inputGuildObject, bannedUserId, inputMessage, messageToPost)
+    break;
 
-  await inputGuildObject.members.fetch(inputUserId).then(kickedUser => {
-    if (isMemberVIP(kickedUser)) {
-      return;
-    }
-    kickedUser.kick(inputReasonMessage)
-    postInWarned(inputGuildObject, `<@!${kickedUser.id}> has been kicked! ${inputReasonMessage}`)
-  }).catch(() => {
-    inputMessage.channel.send('No such user found.')
-   }
-  )
-}
+  case "quarantine": // =quarantine @user
+    let quarantinedUserId:string = extractNumbersForId(arg1);
+    quarantineCommand(inputGuildObject, quarantinedUserId, inputMessage, messageToPost)
+    break;
 
-export let banUserCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputUserId:string, 
-  inputMessage:Discord.Message, 
-  inputReasonMessage?:string):Promise<void> => {
-  await inputGuildObject.members.fetch(inputUserId).then(bannedUser => {
-    if (isMemberVIP(bannedUser)) {
-      return;
-    }
-    bannedUser.ban({ days: 0, reason: inputReasonMessage });
-    postInWarned(inputGuildObject, `<@!${bannedUser.id}> has been banned! ${inputReasonMessage}`)
-  }).catch(() => {
-    inputMessage.channel.send('No such user found.')
-   }
-  )
-}
+  case "unquarantine": // =unquarantine @user
+    let unquarantinedUserId:string = extractNumbersForId(arg1);
+    unQuarantineCommand(inputGuildObject, unquarantinedUserId, inputMessage, messageToPost)
+    break;
 
-export let quarantineCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputUserId:string, 
-  inputMessage:Discord.Message, 
-  inputReasonMessage?:string) => {
-  await inputGuildObject.members.fetch(inputUserId).then(()=>{
-
-    updateUserRole.addRole.byName(inputGuildObject,inputUserId,"Quarantine");
-    postInWarned(inputGuildObject, `<@!${inputUserId}> has been quarantined! ${inputReasonMessage}`)
-  }).catch(() => {
-    inputMessage.channel.send('No such user found.')
-   }
-  )
-}
-
-export let unQuarantineCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputUserId:string, 
-  inputMessage:Discord.Message, 
-  inputReasonMessage?:string) => {
-  await inputGuildObject.members.fetch(inputUserId).then(()=>{
-    updateUserRole.removeRole.byName(inputGuildObject,inputUserId,"Quarantine");
-    postInWarned(inputGuildObject, `<@!${inputUserId}> has been unquarantined! ${inputReasonMessage}`)
-  }).catch(() => {
-    inputMessage.channel.send('No such user found.')
-   }
-  )
-}
-
-export let whoIsCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputIDs:string[], 
-  inputMessage:Discord.Message) => {
-  let checkedMembers = await inputGuildObject.members.fetch();
-  let usernameAndNicknameArray:string[] = []
-  checkedMembers.forEach((member) => {
-    if (memberHasAllRolesById(member, inputIDs)){
-// Populates array with string entries of this format: "DiscordUser#1234 (Nickname)"
-      let nickname = member.nickname ? member.nickname : member.user.username;
-      usernameAndNicknameArray.push(`${member.user.username}#${member.user.discriminator} (${nickname})`)}
-      })
-        let postedUsers:string
-        if (usernameAndNicknameArray[0] === undefined){
-          postedUsers = 'No-one.';
-        } else {
-          postedUsers = usernameAndNicknameArray.join(", ")
-        }
-      let roleNameArray = returnRoleIdNameArrayToPost(inputIDs)
-      let computedPost:string = `The users with the roles[${roleNameArray.join(", ")}] are: ${postedUsers}`
-    appendTxtFileIfPostTooBig(computedPost,inputMessage, "WhoIsFile")
-}
-
-export let howManyAreCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputIDs:string[], 
-  inputMessage:Discord.Message) => {
-
-  let checkedMembers = await inputGuildObject.members.fetch();
-  let usersWithRolesArray:string[] = []
-  checkedMembers.forEach((member) => {
-    if (memberHasAllRolesById(member, inputIDs)){
-      usersWithRolesArray.push(member.user.username);
-    }
-  })
-  let roleNameArray = returnRoleIdNameArrayToPost(inputIDs)
-  
-  inputMessage.channel.send(
-    `Number of users with the following roles[${roleNameArray.join(", ")}] : ${usersWithRolesArray.length}`)
-}
-
-export let replaceAllRolesCommand = async (
-  inputGuildObject:Discord.Guild,
-  inputReplacedRoleId:string,
-  inputNewRoleId:string) => {
-
-  let checkedMembers = await inputGuildObject.members.fetch();
-  checkedMembers.forEach((member)=> {
-    if (memberHasAllRolesById(member,[inputReplacedRoleId])){
-    updateUserRole.removeRole.byId(inputGuildObject,member.id,inputReplacedRoleId);
-    updateUserRole.addRole.byId(inputGuildObject,member.id,inputNewRoleId)
-      };
-  })
-}
-
-export let checkPFPCommand = async (inputGuildObject:Discord.Guild) => {
-  let checkedMembers = await inputGuildObject.members.fetch();
-  checkedMembers.forEach((member) => {
-  if (hasDefaultPFP(member)) {
-    updateUserRole.addRole.byName(
-    member.guild,
-    member.id,
-    "Change PFP")
-  }
-  })
-}
-
-export let warnCommand = async (
-  inputGuildObject:Discord.Guild, 
-  inputUserId:string, 
-  inputMessage:Discord.Message,
-  inputReasonMessage?:string) => {
-  await inputGuildObject.members.fetch(inputUserId).then(warnedUser => {
+  case "warn": // =warn @user
 // Three-stage warning system. 
 // If no warned role, add "Warned" role. 
 // If has "Warned", remove "Warned", add "Warned Twice". 
 // If "Warned Twice", ban.
-    if (isMemberVIP(warnedUser)) {
-      return;
+    let warnedUserId:string = extractNumbersForId(arg1)
+    warnCommand(inputGuildObject,warnedUserId,inputMessage,messageToPost)
+    break;
+
+  case `msg`: // =msg #channel message
+    let targetChannelId:string = extractNumbersForId(arg1);
+    msgCommand(inputGuildObject,targetChannelId, inputMessage, messageToPost)
+    break;
+
+  case `dmsg`: // =dmsg @user message
+    let targetUserId:string = extractNumbersForId(arg1);
+    dmsgCommand(inputGuildObject,targetUserId, inputMessage, messageToPost)
+    break;
+  }
+
+}
+
+export let twoArgCommandArray:string[] = ["replaceall"]
+
+export  async function twoArgumentBotCommands(inputGuildObject:Discord.Guild,  commandInput:string, arg1:string, arg2:string, inputMessage:Discord.Message) {
+
+  switch (commandInput) {
+
+    case "replaceall": // =replaceall @roleA @roleB
+      let replacedRoleId:string = extractNumbersForId(arg1);
+      let newRoleId:string = extractNumbersForId(arg2);
+      replaceAllRolesCommand(inputGuildObject, replacedRoleId, newRoleId)
+      break;
     }
-    let rolesArray = warnedUser.roles.cache.array();
+}
 
-    for (let i = 0; i < rolesArray.length; i++) {
-      let testedRoleName = warnedUser.roles.cache.array()[i].name;
-      if (testedRoleName === "Warned Twice") {
-        warnedUser.ban({ days: 0, reason: inputReasonMessage });
-        postInWarned(inputGuildObject,
-          `<@!${inputUserId}> has been banned for being warned three times! ${inputReasonMessage}`);
-        return;
-      }
-      if (testedRoleName === "Warned") {
-        updateUserRole.removeRole.byName(inputGuildObject,inputUserId,"Warned")
-        updateUserRole.addRole.byName(inputGuildObject,inputUserId,"Warned Twice");
-        updateUserRole.addRole.byName(inputGuildObject,inputUserId,"Quarantine")
-        postInWarned(inputGuildObject,
-          `<@!${inputUserId}> has been warned twice! ${inputReasonMessage}`);
-        return;
+export let arbitraryArgCommandArray:string[] = ["howmanyare","whois"]
+
+export async function arbitraryArgumentBotCommands(inputGuildObject:Discord.Guild, 
+  commandInput:string, 
+  inputTokens:string[], 
+  inputMessage:Discord.Message) {
+
+  let inputIDs:string[] = extractTokens(returnIdArrayFromArgs(inputTokens).join(" "))
+  
+    switch(commandInput){
+      
+      case "howmanyare": // =howmanyare @role @role .. etc
+        howManyAreCommand(inputGuildObject, inputIDs, inputMessage)
+        break;
+
+      case "whois": // =whois @role @role .. etc
+        whoIsCommand(inputGuildObject, inputIDs, inputMessage)
+        break;
       }
     }
-    updateUserRole.addRole.byName(inputGuildObject,inputUserId,"Warned");
-    updateUserRole.addRole.byName(inputGuildObject,inputUserId,"Quarantine")
-    postInWarned(inputGuildObject,
-      `<@!${inputUserId}> has been warned! ${inputReasonMessage}`);
-  }).catch(() => {
-    inputMessage.channel.send('No such user found.')
-   }
-  )
-}
-
-export let msgCommand = async (
-  inputGuildObject:Discord.Guild,
-  inputChannelId:string,
-  inputMessage:Discord.Message,
-  inputPost:string) => {
-
-      const targetChannel = inputGuildObject.channels.cache.get(inputChannelId).name;
-      postInNamedChannel(targetChannel)(inputGuildObject, inputPost).catch(
-        () => inputMessage.channel.send('No channel found')
-      )
-}
-
-export let dmsgCommand = async (
-  inputGuildObject:Discord.Guild,
-  inputUserId:string,
-  inputMessage:Discord.Message,
-  inputPost:string) => {
-
-  await inputGuildObject.members.fetch(inputUserId).then((messagedUser) => {
-    messagedUser.send(inputPost);
-  }).catch(
-    () => inputMessage.channel.send('No user found.')
-  )
-}
